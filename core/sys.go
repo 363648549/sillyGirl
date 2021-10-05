@@ -8,11 +8,19 @@ import (
 	"regexp"
 	"runtime"
 	"strings"
+	"time"
 
 	"github.com/astaxie/beego/logs"
 )
 
+var BeforeStop = []func(){}
+
+var pidf = "/var/run/" + pname + ".pid"
+
 func Daemon() {
+	for _, bs := range BeforeStop {
+		bs()
+	}
 	args := os.Args[1:]
 	execArgs := make([]string, 0)
 	l := len(args)
@@ -28,6 +36,7 @@ func Daemon() {
 		panic(err)
 	}
 	logs.Info(sillyGirl.Get("name", "傻妞") + "以静默形式运行")
+	os.WriteFile(pidf, []byte(fmt.Sprintf("%d", proc.Process.Pid)), 0o644)
 	os.Exit(0)
 }
 
@@ -51,14 +60,21 @@ func GitPull(filename string) (bool, error) {
 }
 
 func CompileCode() error {
-	_, err := exec.Command("sh", "-c", "cd "+ExecPath+" && go build -o "+pname).Output()
+	cmd := exec.Command("sh", "-c", "cd "+ExecPath+" && go build -o "+pname)
+	_, err := cmd.Output()
 	if err != nil {
 		return errors.New("编译失败：" + err.Error() + "。")
 	}
+	sillyGirl.Set("compiled_at", time.Now().Format("2006-01-02 15:04:05"))
 	return nil
 }
 
 func killp() {
+	// data, _ := os.ReadFile(pidf)
+	// pid := Int(string(data))
+	// if pid > 0 {
+	// 	syscall.Kill(-pid, syscall.SIGKILL)
+	// }
 	pids, err := ppid()
 	if err == nil {
 		if len(pids) == 0 {

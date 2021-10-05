@@ -24,7 +24,7 @@ type Function struct {
 	Cron    string
 }
 
-var pname = regexp.MustCompile(`/([^/\s]+)`).FindStringSubmatch(os.Args[0])[1]
+var pname = regexp.MustCompile(`/([^/\s]+)$`).FindStringSubmatch(os.Args[0])[1]
 
 var name = func() string {
 	return sillyGirl.Get("name", "傻妞")
@@ -50,19 +50,25 @@ func AddCommand(prefix string, cmds []Function) {
 				cmds[j].Rules[i] = strings.Replace(cmds[j].Rules[i], "raw ", "", -1)
 				continue
 			}
+			if strings.Contains(cmds[j].Rules[i], "$") {
+				continue
+			}
 			if prefix != "" {
 				cmds[j].Rules[i] = prefix + `\s+` + cmds[j].Rules[i]
 			}
+
 			cmds[j].Rules[i] = strings.Replace(cmds[j].Rules[i], "(", `[(]`, -1)
 			cmds[j].Rules[i] = strings.Replace(cmds[j].Rules[i], ")", `[)]`, -1)
+			cmds[j].Rules[i] = regexp.MustCompile(`\?$`).ReplaceAllString(cmds[j].Rules[i], `(.+)`)
 			cmds[j].Rules[i] = strings.Replace(cmds[j].Rules[i], " ", `\s+`, -1)
 			cmds[j].Rules[i] = strings.Replace(cmds[j].Rules[i], "?", `(\S+)`, -1)
 			cmds[j].Rules[i] = "^" + cmds[j].Rules[i] + "$"
 		}
 		functions = append(functions, cmds[j])
 		if cmds[j].Cron != "" {
+			cmd := cmds[j]
 			if _, err := c.AddFunc(cmds[j].Cron, func() {
-				cmds[j].Handle(&Faker{})
+				cmd.Handle(&Faker{})
 			}); err != nil {
 				logs.Warn("任务%v添加失败%v", cmds[j].Rules[0], err)
 			} else {
@@ -93,13 +99,17 @@ func handleMessage(sender Sender) {
 			}
 			if matched {
 				if function.Admin && !sender.IsAdmin() {
+					sender.Delete()
+					sender.Disappear()
 					sender.Reply("没有权限操作")
+					sender.Finish()
 					return
 				}
 				rt := function.Handle(sender)
 				if rt != nil {
 					sender.Reply(rt)
 				}
+				sender.Finish()
 				return
 			}
 		}

@@ -81,7 +81,7 @@ func init() {
 				if err != nil {
 					return err
 				}
-				if err := Req(CRONS, PUT, "/run", []byte(fmt.Sprintf(`["%s"]`, cron.ID))); err != nil {
+				if err := Config.Req(CRONS, PUT, "/run", []byte(fmt.Sprintf(`["%s"]`, cron.ID))); err != nil {
 					return err
 				}
 				return fmt.Sprintf("已运行 %v", cron.Name)
@@ -95,7 +95,7 @@ func init() {
 				if err != nil {
 					return err
 				}
-				if err := Req(CRONS, PUT, "/stop", []byte(fmt.Sprintf(`["%s"]`, cron.ID))); err != nil {
+				if err := Config.Req(CRONS, PUT, "/stop", []byte(fmt.Sprintf(`["%s"]`, cron.ID))); err != nil {
 					return err
 				}
 				return "操作成功"
@@ -109,7 +109,7 @@ func init() {
 				if err != nil {
 					return err
 				}
-				if err := Req(CRONS, PUT, "/enable", []byte(fmt.Sprintf(`["%s"]`, cron.ID))); err != nil {
+				if err := Config.Req(CRONS, PUT, "/enable", []byte(fmt.Sprintf(`["%s"]`, cron.ID))); err != nil {
 					return err
 				}
 				return "操作成功"
@@ -123,7 +123,7 @@ func init() {
 				if err != nil {
 					return err
 				}
-				if err := Req(CRONS, PUT, "/disable", []byte(fmt.Sprintf(`["%s"]`, cron.ID))); err != nil {
+				if err := Config.Req(CRONS, PUT, "/disable", []byte(fmt.Sprintf(`["%s"]`, cron.ID))); err != nil {
 					return err
 				}
 				return "操作成功"
@@ -173,7 +173,7 @@ func init() {
 				if err != nil {
 					return err
 				}
-				if err := Req(CRONS, PUT, "/run", []byte(fmt.Sprintf(`["%s"]`, cron.ID))); err != nil {
+				if err := Config.Req(CRONS, PUT, "/run", []byte(fmt.Sprintf(`["%s"]`, cron.ID))); err != nil {
 					return err
 				}
 				return "操作成功"
@@ -198,8 +198,17 @@ func init() {
 			Rules: []string{`cron hide duplicate`},
 			Admin: true,
 			Cron:  "*/5 * * * *",
-			Handle: func(_ core.Sender) interface{} {
+			Handle: func(s core.Sender) interface{} {
+				if Config.Host == "" {
+					return nil
+				}
+				if s.GetImType() == "fake" && qinglong.GetBool("autoCronHideDuplicate", true) == false {
+					return nil
+				}
 				w := func(s string) int {
+					if strings.Contains(s, "cdle") {
+						return 20
+					}
 					if strings.Contains(s, "shufflewzc") {
 						return 1
 					}
@@ -223,6 +232,10 @@ func init() {
 					if crons[i].IsDisabled != 0 {
 						continue
 					}
+					if strings.Contains(crons[i].Command, "jd_disable.py") {
+						Config.Req(CRONS, PUT, "/disable", []byte(fmt.Sprintf(`["%s"]`, crons[i].ID)))
+						continue
+					}
 					if task, ok := tasks[crons[i].Name]; ok {
 						var dup Cron
 						if w(task.Command) > w(crons[i].Command) {
@@ -231,10 +244,10 @@ func init() {
 							dup = task
 							tasks[crons[i].Name] = crons[i]
 						}
-						if err := Req(CRONS, PUT, "/disable", []byte(fmt.Sprintf(`["%s"]`, dup.ID))); err != nil {
-							// s.Reply(fmt.Sprintf("隐藏 %v %v %v", dup.Name, dup.Command, err))
+						if err := Config.Req(CRONS, PUT, "/disable", []byte(fmt.Sprintf(`["%s"]`, dup.ID))); err != nil {
+							s.Reply(fmt.Sprintf("隐藏 %v %v %v", dup.Name, dup.Command, err))
 						} else {
-							// s.Reply(fmt.Sprintf("已隐藏重复任务 %v %v", dup.Name, dup.Command))
+							s.Reply(fmt.Sprintf("已隐藏重复任务 %v %v", dup.Name, dup.Command), core.N)
 						}
 					} else {
 						tasks[crons[i].Name] = crons[i]
@@ -248,7 +261,7 @@ func init() {
 
 func GetCrons(searchValue string) ([]Cron, error) {
 	er := CronResponse{}
-	if err := Req(CRONS, &er, "?searchValue="+searchValue); err != nil {
+	if err := Config.Req(CRONS, &er, "?searchValue="+searchValue); err != nil {
 		return nil, err
 	}
 	return er.Data, nil
@@ -258,7 +271,7 @@ func GetCronLog(id string) (string, error) {
 	c := &Carrier{
 		Get: "data",
 	}
-	if err := Req(CRONS, "/"+id+"/log", c); err != nil {
+	if err := Config.Req(CRONS, "/"+id+"/log", c); err != nil {
 		return "", err
 	}
 	return c.Value, nil
@@ -288,6 +301,9 @@ func GetCronID(keyword string) (*Cron, error) {
 	}
 	cs := []Cron{}
 	for _, cron := range crons {
+		if cron.IsDisabled != 0 {
+			continue
+		}
 		if cron.ID == keyword {
 			cs = append(cs, cron)
 			break

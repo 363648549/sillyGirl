@@ -24,25 +24,33 @@ type Sender interface {
 	Reply(...interface{}) (int, error)
 	Delete() error
 	Disappear(lifetime ...time.Duration)
+	Finish()
 }
 
 type Edit int
 type Replace int
+type Notify int
+type Article []string
 
 var E Edit
 var R Replace
+var N Notify
+
+type ImageUrl string
 
 type Faker struct {
-	Message interface{}
+	Message string
 	matches [][]string
+	Type    string
+	UserID  int
 }
 
 func (sender *Faker) GetContent() string {
-	return ""
+	return sender.Message
 }
 
 func (sender *Faker) GetUserID() int {
-	return 0
+	return sender.UserID
 }
 
 func (sender *Faker) GetChatID() int {
@@ -50,7 +58,10 @@ func (sender *Faker) GetChatID() int {
 }
 
 func (sender *Faker) GetImType() string {
-	return ""
+	if sender.Type == "" {
+		return "fake"
+	}
+	return sender.Type
 }
 
 func (sender *Faker) GetMessageID() int {
@@ -70,26 +81,36 @@ func (sender *Faker) GetReplySenderUserID() int {
 }
 
 func (sender *Faker) GetRawMessage() interface{} {
-	return nil
+	return sender.Message
 }
 
 func (sender *Faker) SetMatch(ss []string) {
-
+	sender.matches = [][]string{ss}
 }
 func (sender *Faker) SetAllMatch(ss [][]string) {
-
+	sender.matches = ss
 }
 
 func (sender *Faker) GetMatch() []string {
-	return nil
+	return sender.matches[0]
 }
 
 func (sender *Faker) GetAllMatch() [][]string {
-	return nil
+	return sender.matches
 }
 
 func (sender *Faker) Get(index ...int) string {
-	return ""
+	i := 0
+	if len(index) != 0 {
+		i = index[0]
+	}
+	if len(sender.matches) == 0 {
+		return ""
+	}
+	if len(sender.matches[0]) < i+1 {
+		return ""
+	}
+	return sender.matches[0][i]
 }
 
 func (sender *Faker) IsAdmin() bool {
@@ -101,6 +122,22 @@ func (sender *Faker) IsMedia() bool {
 }
 
 func (sender *Faker) Reply(msgs ...interface{}) (int, error) {
+	rt := ""
+	var n *Notify
+	for _, msg := range msgs {
+		switch msg.(type) {
+		case []byte:
+			rt = (string(msg.([]byte)))
+		case string:
+			rt = (msg.(string))
+		case Notify:
+			v := msg.(Notify)
+			n = &v
+		}
+	}
+	if rt != "" && n != nil {
+		NotifyMasters(rt)
+	}
 	return 0, nil
 }
 
@@ -109,5 +146,9 @@ func (sender *Faker) Delete() error {
 }
 
 func (sender *Faker) Disappear(lifetime ...time.Duration) {
+
+}
+
+func (sender *Faker) Finish() {
 
 }
